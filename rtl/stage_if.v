@@ -18,14 +18,15 @@ module stage_if (
     // Next PC selection: branch target or sequential 
     assign next_pc = branch_taken ? branch_target : pc_plus4; 
  
-    // PC register 
-    always @(posedge clk or negedge rst_n) begin 
-        if (!rst_n) begin 
-            pc_out <= 32'h0000_0000;  // Reset vector 
-        end else if (!stall) begin 
-            pc_out <= next_pc; 
-        end 
-        // If stall, hold current PC 
+    // PC register: branch always overrides stall (exception takes priority over load-use hazard)
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            pc_out <= 32'h0000_0000;
+        end else if (branch_taken) begin
+            pc_out <= branch_target;
+        end else if (!stall) begin
+            pc_out <= pc_plus4;
+        end
     end 
  
     // Instruction memory interface 

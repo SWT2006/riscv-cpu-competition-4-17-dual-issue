@@ -14,19 +14,23 @@ module stage_id (
     output wire [ 4:0] rs1_addr, 
     output wire [ 4:0] rs2_addr, 
     output wire [ 4:0] rd_addr, 
-    output wire [ 3:0] alu_op, 
+    output wire [ 4:0] alu_op,
     output wire        alu_src, 
     output wire        mem_read, 
     output wire        mem_write, 
     output wire [ 2:0] mem_funct3, 
     output wire        reg_write, 
     output wire [ 1:0] wb_sel, 
-    output wire        branch, 
-    output wire        jal, 
-    output wire        jalr, 
-    output wire        lui, 
-    output wire        auipc, 
-    output wire [ 2:0] funct3 
+    output wire        branch,
+    output wire        jal,
+    output wire        jalr,
+    output wire        lui,
+    output wire        auipc,
+    output wire [ 2:0] funct3,
+    output wire        ecall,
+    output wire        mret,
+    output wire        csr_op,
+    output wire [11:0] csr_addr
 ); 
  
     // Instruction fields 
@@ -37,11 +41,12 @@ module stage_id (
     wire [4:0] rs2    = instruction[24:20]; 
     wire [6:0] funct7 = instruction[31:25]; 
  
-    assign rs1_addr   = rs1; 
-    assign rs2_addr   = rs2; 
-    assign rd_addr    = rd; 
-    assign funct3     = f3; 
-    assign mem_funct3 = f3; 
+    assign rs1_addr   = rs1;
+    assign rs2_addr   = rs2;
+    assign rd_addr    = rd;
+    assign funct3     = f3;
+    assign mem_funct3 = f3;
+    assign csr_addr   = instruction[31:20]; 
  
     // --------------------------------------------------------------- 
     // Register File 
@@ -77,21 +82,24 @@ module stage_id (
     // --------------------------------------------------------------- 
     // Control Unit 
     // --------------------------------------------------------------- 
-    control_unit u_control ( 
-        .opcode   (opcode), 
-        .funct3   (f3), 
-        .funct7   (funct7), 
-        .alu_op   (alu_op), 
-        .alu_src  (alu_src), 
-        .mem_read (mem_read), 
-        .mem_write(mem_write), 
-        .reg_write(reg_write), 
-        .wb_sel   (wb_sel), 
-        .branch   (branch), 
-        .jal      (jal), 
-        .jalr     (jalr), 
-        .lui      (lui), 
-        .auipc    (auipc) 
+    control_unit u_control (
+        .opcode   (opcode),
+        .funct3   (f3),
+        .funct7   (funct7),
+        .alu_op   (alu_op),
+        .alu_src  (alu_src),
+        .mem_read (mem_read),
+        .mem_write(mem_write),
+        .reg_write(reg_write),
+        .wb_sel   (wb_sel),
+        .branch   (branch),
+        .jal      (jal),
+        .jalr     (jalr),
+        .lui      (lui),
+        .auipc    (auipc),
+        .ecall    (ecall),
+        .mret     (mret),
+        .csr_op   (csr_op)
     ); 
  
 endmodule 

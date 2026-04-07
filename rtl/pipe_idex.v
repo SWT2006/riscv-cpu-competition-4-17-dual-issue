@@ -12,20 +12,25 @@ module pipe_idex (
     input  wire [ 4:0] id_rs1_addr, 
     input  wire [ 4:0] id_rs2_addr, 
     input  wire [ 4:0] id_rd_addr, 
-    input  wire [ 3:0] id_alu_op, 
+    input  wire [ 4:0] id_alu_op,
     input  wire        id_alu_src, 
     input  wire        id_mem_read, 
     input  wire        id_mem_write, 
     input  wire [ 2:0] id_mem_funct3, 
     input  wire        id_reg_write, 
     input  wire [ 1:0] id_wb_sel, 
-    input  wire        id_branch, 
-    input  wire        id_jal, 
-    input  wire        id_jalr, 
-    input  wire        id_lui, 
-    input  wire        id_auipc, 
-    input  wire [ 2:0] id_funct3, 
-    // Outputs to EX stage 
+    input  wire        id_branch,
+    input  wire        id_jal,
+    input  wire        id_jalr,
+    input  wire        id_lui,
+    input  wire        id_auipc,
+    input  wire [ 2:0] id_funct3,
+    input  wire        id_ecall,
+    input  wire        id_mret,
+    input  wire        id_csr_op,
+    input  wire [31:0] id_csr_rdata,
+    input  wire [11:0] id_csr_addr,
+    // Outputs to EX stage
     output reg  [31:0] idex_pc, 
     output reg  [31:0] idex_pc_plus4, 
     output reg  [31:0] idex_rs1_data, 
@@ -34,19 +39,24 @@ module pipe_idex (
     output reg  [ 4:0] idex_rs1_addr, 
     output reg  [ 4:0] idex_rs2_addr, 
     output reg  [ 4:0] idex_rd_addr, 
-    output reg  [ 3:0] idex_alu_op, 
+    output reg  [ 4:0] idex_alu_op,
     output reg         idex_alu_src, 
     output reg         idex_mem_read, 
     output reg         idex_mem_write, 
     output reg  [ 2:0] idex_mem_funct3, 
     output reg         idex_reg_write, 
     output reg  [ 1:0] idex_wb_sel, 
-    output reg         idex_branch, 
-    output reg         idex_jal, 
-    output reg         idex_jalr, 
-    output reg         idex_lui, 
-    output reg         idex_auipc, 
-    output reg  [ 2:0] idex_funct3 
+    output reg         idex_branch,
+    output reg         idex_jal,
+    output reg         idex_jalr,
+    output reg         idex_lui,
+    output reg         idex_auipc,
+    output reg  [ 2:0] idex_funct3,
+    output reg         idex_ecall,
+    output reg         idex_mret,
+    output reg         idex_csr_op,
+    output reg  [31:0] idex_csr_rdata,
+    output reg  [11:0] idex_csr_addr
 ); 
  
     always @(posedge clk or negedge rst_n) begin 
@@ -59,19 +69,24 @@ module pipe_idex (
             idex_rs1_addr   <= 5'b0; 
             idex_rs2_addr   <= 5'b0; 
             idex_rd_addr    <= 5'b0; 
-            idex_alu_op     <= 4'b0; 
+            idex_alu_op     <= 5'b0;
             idex_alu_src    <= 1'b0; 
             idex_mem_read   <= 1'b0; 
             idex_mem_write  <= 1'b0; 
             idex_mem_funct3 <= 3'b0; 
             idex_reg_write  <= 1'b0; 
             idex_wb_sel     <= 2'b0; 
-            idex_branch     <= 1'b0; 
-            idex_jal        <= 1'b0; 
-            idex_jalr       <= 1'b0; 
-            idex_lui        <= 1'b0; 
-            idex_auipc      <= 1'b0; 
-            idex_funct3     <= 3'b0; 
+            idex_branch     <= 1'b0;
+            idex_jal        <= 1'b0;
+            idex_jalr       <= 1'b0;
+            idex_lui        <= 1'b0;
+            idex_auipc      <= 1'b0;
+            idex_funct3     <= 3'b0;
+            idex_ecall      <= 1'b0;
+            idex_mret       <= 1'b0;
+            idex_csr_op     <= 1'b0;
+            idex_csr_rdata  <= 32'b0;
+            idex_csr_addr   <= 12'b0;
         end else if (!stall) begin 
             idex_pc         <= id_pc; 
             idex_pc_plus4   <= id_pc_plus4; 
@@ -88,13 +103,18 @@ module pipe_idex (
             idex_mem_funct3 <= id_mem_funct3; 
             idex_reg_write  <= id_reg_write; 
             idex_wb_sel     <= id_wb_sel; 
-            idex_branch     <= id_branch; 
-            idex_jal        <= id_jal; 
-            idex_jalr       <= id_jalr; 
-            idex_lui        <= id_lui; 
-            idex_auipc      <= id_auipc; 
-            idex_funct3     <= id_funct3; 
-        end 
+            idex_branch     <= id_branch;
+            idex_jal        <= id_jal;
+            idex_jalr       <= id_jalr;
+            idex_lui        <= id_lui;
+            idex_auipc      <= id_auipc;
+            idex_funct3     <= id_funct3;
+            idex_ecall      <= id_ecall;
+            idex_mret       <= id_mret;
+            idex_csr_op     <= id_csr_op;
+            idex_csr_rdata  <= id_csr_rdata;
+            idex_csr_addr   <= id_csr_addr;
+        end
     end 
  
 endmodule 

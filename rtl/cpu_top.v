@@ -27,48 +27,58 @@ module riscv_cpu_top (
     wire [31:0] ifid_pc_plus4; 
     wire [31:0] ifid_instruction; 
  
-    // ID stage outputs 
-    wire [31:0] id_rs1_data; 
-    wire [31:0] id_rs2_data; 
-    wire [31:0] id_imm; 
-    wire [ 4:0] id_rs1_addr; 
-    wire [ 4:0] id_rs2_addr; 
-    wire [ 4:0] id_rd_addr; 
-    wire [ 3:0] id_alu_op; 
-    wire        id_alu_src;         // 0=rs2, 1=imm 
-    wire        id_mem_read; 
-    wire        id_mem_write; 
-    wire [2:0]  id_mem_funct3; 
-    wire        id_reg_write; 
-    wire [1:0]  id_wb_sel;          // 00=ALU, 01=MEM, 10=PC+4 
-    wire        id_branch; 
-    wire        id_jal; 
-    wire        id_jalr; 
-    wire        id_lui; 
-    wire        id_auipc; 
+    // ID stage outputs
+    wire [31:0] id_rs1_data;
+    wire [31:0] id_rs2_data;
+    wire [31:0] id_imm;
+    wire [ 4:0] id_rs1_addr;
+    wire [ 4:0] id_rs2_addr;
+    wire [ 4:0] id_rd_addr;
+    wire [ 4:0] id_alu_op;
+    wire        id_alu_src;         // 0=rs2, 1=imm
+    wire        id_mem_read;
+    wire        id_mem_write;
+    wire [2:0]  id_mem_funct3;
+    wire        id_reg_write;
+    wire [1:0]  id_wb_sel;          // 00=ALU, 01=MEM, 10=PC+4
+    wire        id_branch;
+    wire        id_jal;
+    wire        id_jalr;
+    wire        id_lui;
+    wire        id_auipc;
+    wire        id_ecall;
+    wire        id_mret;
+    wire        id_csr_op;
+    wire [11:0] id_csr_addr;
+    wire [31:0] id_csr_rdata;       // CSR read result for ID stage 
  
-    // ID/EX pipeline register outputs 
-    wire [31:0] idex_pc; 
-    wire [31:0] idex_pc_plus4; 
-    wire [31:0] idex_rs1_data; 
-    wire [31:0] idex_rs2_data; 
-    wire [31:0] idex_imm; 
-    wire [ 4:0] idex_rs1_addr; 
-    wire [ 4:0] idex_rs2_addr; 
-    wire [ 4:0] idex_rd_addr; 
-    wire [ 3:0] idex_alu_op; 
-    wire        idex_alu_src; 
-    wire        idex_mem_read; 
-    wire        idex_mem_write; 
-    wire [2:0]  idex_mem_funct3; 
-    wire        idex_reg_write; 
-    wire [1:0]  idex_wb_sel; 
-    wire        idex_branch; 
-    wire        idex_jal; 
-    wire        idex_jalr; 
-    wire        idex_lui; 
-    wire        idex_auipc; 
-    wire [2:0]  idex_funct3; 
+    // ID/EX pipeline register outputs
+    wire [31:0] idex_pc;
+    wire [31:0] idex_pc_plus4;
+    wire [31:0] idex_rs1_data;
+    wire [31:0] idex_rs2_data;
+    wire [31:0] idex_imm;
+    wire [ 4:0] idex_rs1_addr;
+    wire [ 4:0] idex_rs2_addr;
+    wire [ 4:0] idex_rd_addr;
+    wire [ 4:0] idex_alu_op;
+    wire        idex_alu_src;
+    wire        idex_mem_read;
+    wire        idex_mem_write;
+    wire [2:0]  idex_mem_funct3;
+    wire        idex_reg_write;
+    wire [1:0]  idex_wb_sel;
+    wire        idex_branch;
+    wire        idex_jal;
+    wire        idex_jalr;
+    wire        idex_lui;
+    wire        idex_auipc;
+    wire [2:0]  idex_funct3;
+    wire        idex_ecall;
+    wire        idex_mret;
+    wire        idex_csr_op;
+    wire [31:0] idex_csr_rdata;
+    wire [11:0] idex_csr_addr; 
  
     // EX stage outputs 
     wire [31:0] ex_alu_result; 
@@ -101,11 +111,26 @@ module riscv_cpu_top (
     // WB stage output 
     wire [31:0] wb_write_data; 
  
-    // Hazard / Control signals 
-    wire        stall;              // Pipeline stall (load-use hazard) 
-    wire        flush;              // Pipeline flush (branch/jump taken) 
-    wire [1:0]  forward_a;         // Forwarding mux select for rs1 
-    wire [1:0]  forward_b;         // Forwarding mux select for rs2 
+    // Hazard / Control signals
+    wire        stall;              // Pipeline stall (load-use hazard)
+    wire        flush;              // Pipeline flush (branch/jump taken)
+    wire [1:0]  forward_a;         // Forwarding mux select for rs1
+    wire [1:0]  forward_b;         // Forwarding mux select for rs2
+
+    // CSR unit interface (EX stage → csr_unit)
+    wire        ex_trap_ecall;
+    wire [31:0] ex_trap_epc;
+    wire [31:0] ex_trap_mcause;
+    wire [31:0] ex_trap_mtval;
+    wire        ex_suppress_mem;
+    wire        ex_suppress_wb;
+    wire        ex_csr_wen;
+    wire [11:0] ex_csr_waddr;
+    wire [31:0] ex_csr_wdata;
+    wire [31:0] csr_mtvec;
+    wire [31:0] csr_mepc;
+
+    wire        exmem_suppress_mem;
  
     // --------------------------------------------------------------- 
     // Stage 1: Instruction Fetch (IF) 
@@ -165,12 +190,16 @@ module riscv_cpu_top (
         .mem_funct3     (id_mem_funct3), 
         .reg_write      (id_reg_write), 
         .wb_sel         (id_wb_sel), 
-        .branch         (id_branch), 
-        .jal            (id_jal), 
-        .jalr           (id_jalr), 
-        .lui            (id_lui), 
-        .auipc          (id_auipc), 
-        .funct3         () 
+        .branch         (id_branch),
+        .jal            (id_jal),
+        .jalr           (id_jalr),
+        .lui            (id_lui),
+        .auipc          (id_auipc),
+        .funct3         (),
+        .ecall          (id_ecall),
+        .mret           (id_mret),
+        .csr_op         (id_csr_op),
+        .csr_addr       (id_csr_addr)
     ); 
  
     // --------------------------------------------------------------- 
@@ -202,8 +231,13 @@ module riscv_cpu_top (
         .id_jalr        (id_jalr), 
         .id_lui         (id_lui), 
         .id_auipc       (id_auipc), 
-        .id_funct3      (ifid_instruction[14:12]), 
-        // Outputs 
+        .id_funct3      (ifid_instruction[14:12]),
+        .id_ecall       (id_ecall),
+        .id_mret        (id_mret),
+        .id_csr_op      (id_csr_op),
+        .id_csr_rdata   (id_csr_rdata),
+        .id_csr_addr    (id_csr_addr),
+        // Outputs
         .idex_pc        (idex_pc), 
         .idex_pc_plus4  (idex_pc_plus4), 
         .idex_rs1_data  (idex_rs1_data), 
@@ -219,12 +253,17 @@ module riscv_cpu_top (
         .idex_mem_funct3(idex_mem_funct3), 
         .idex_reg_write (idex_reg_write), 
         .idex_wb_sel    (idex_wb_sel), 
-        .idex_branch    (idex_branch), 
-        .idex_jal       (idex_jal), 
-        .idex_jalr      (idex_jalr), 
-        .idex_lui       (idex_lui), 
-        .idex_auipc     (idex_auipc), 
-        .idex_funct3    (idex_funct3) 
+        .idex_branch    (idex_branch),
+        .idex_jal       (idex_jal),
+        .idex_jalr      (idex_jalr),
+        .idex_lui       (idex_lui),
+        .idex_auipc     (idex_auipc),
+        .idex_funct3    (idex_funct3),
+        .idex_ecall     (idex_ecall),
+        .idex_mret      (idex_mret),
+        .idex_csr_op    (idex_csr_op),
+        .idex_csr_rdata (idex_csr_rdata),
+        .idex_csr_addr  (idex_csr_addr)
     ); 
  
     // --------------------------------------------------------------- 
@@ -241,13 +280,22 @@ module riscv_cpu_top (
         .idex_rd_addr   (idex_rd_addr), 
         .idex_alu_op    (idex_alu_op), 
         .idex_alu_src   (idex_alu_src), 
-        .idex_branch    (idex_branch), 
-        .idex_jal       (idex_jal), 
-        .idex_jalr      (idex_jalr), 
-        .idex_lui       (idex_lui), 
-        .idex_auipc     (idex_auipc), 
-        .idex_funct3    (idex_funct3), 
-        // Forwarding inputs 
+        .idex_mem_read  (idex_mem_read),
+        .idex_mem_write (idex_mem_write),
+        .idex_branch    (idex_branch),
+        .idex_jal       (idex_jal),
+        .idex_jalr      (idex_jalr),
+        .idex_lui       (idex_lui),
+        .idex_auipc     (idex_auipc),
+        .idex_funct3    (idex_funct3),
+        .idex_ecall     (idex_ecall),
+        .idex_mret      (idex_mret),
+        .idex_csr_op    (idex_csr_op),
+        .idex_csr_rdata (idex_csr_rdata),
+        .idex_csr_addr  (idex_csr_addr),
+        .csr_mtvec      (csr_mtvec),
+        .csr_mepc       (csr_mepc),
+        // Forwarding inputs
         .forward_a      (forward_a), 
         .forward_b      (forward_b), 
         .exmem_alu_result(exmem_alu_result), 
@@ -257,10 +305,19 @@ module riscv_cpu_top (
         .memwb_wb_sel   (memwb_wb_sel), 
         .memwb_pc_plus4 (memwb_pc_plus4), 
         // Outputs 
-        .alu_result     (ex_alu_result), 
-        .rs2_data_fwd   (ex_rs2_data_fwd), 
-        .branch_taken   (ex_branch_taken), 
-        .branch_target  (ex_branch_target) 
+        .alu_result     (ex_alu_result),
+        .rs2_data_fwd   (ex_rs2_data_fwd),
+        .branch_taken   (ex_branch_taken),
+        .branch_target  (ex_branch_target),
+        .trap_ecall     (ex_trap_ecall),
+        .trap_epc       (ex_trap_epc),
+        .trap_mcause    (ex_trap_mcause),
+        .trap_mtval     (ex_trap_mtval),
+        .suppress_mem   (ex_suppress_mem),
+        .suppress_wb    (ex_suppress_wb),
+        .csr_wen        (ex_csr_wen),
+        .csr_waddr      (ex_csr_waddr),
+        .csr_wdata      (ex_csr_wdata)
     ); 
  
     assign flush = ex_branch_taken; 
@@ -277,11 +334,13 @@ module riscv_cpu_top (
         .ex_rs2_data    (ex_rs2_data_fwd), 
         .ex_rd_addr     (idex_rd_addr), 
         .ex_mem_read    (idex_mem_read), 
-        .ex_mem_write   (idex_mem_write), 
-        .ex_mem_funct3  (idex_mem_funct3), 
-        .ex_reg_write   (idex_reg_write), 
-        .ex_wb_sel      (idex_wb_sel), 
-        // Outputs 
+        .ex_mem_write   (idex_mem_write),
+        .ex_mem_funct3  (idex_mem_funct3),
+        .ex_reg_write   (idex_reg_write),
+        .ex_wb_sel      (idex_wb_sel),
+        .ex_suppress_mem(ex_suppress_mem),
+        .ex_suppress_wb (ex_suppress_wb),
+        // Outputs
         .exmem_pc_plus4 (exmem_pc_plus4), 
         .exmem_alu_result(exmem_alu_result), 
         .exmem_rs2_data (exmem_rs2_data), 
@@ -289,8 +348,9 @@ module riscv_cpu_top (
         .exmem_mem_read (exmem_mem_read), 
         .exmem_mem_write(exmem_mem_write), 
         .exmem_mem_funct3(exmem_mem_funct3), 
-        .exmem_reg_write(exmem_reg_write), 
-        .exmem_wb_sel   (exmem_wb_sel) 
+        .exmem_reg_write(exmem_reg_write),
+        .exmem_wb_sel   (exmem_wb_sel),
+        .exmem_suppress_mem(exmem_suppress_mem)
     ); 
  
     // --------------------------------------------------------------- 
@@ -299,9 +359,10 @@ module riscv_cpu_top (
     stage_mem u_stage_mem ( 
         .exmem_alu_result(exmem_alu_result), 
         .exmem_rs2_data (exmem_rs2_data), 
-        .exmem_mem_read (exmem_mem_read), 
-        .exmem_mem_write(exmem_mem_write), 
-        .exmem_mem_funct3(exmem_mem_funct3), 
+        .exmem_mem_read (exmem_mem_read),
+        .exmem_mem_write(exmem_mem_write),
+        .exmem_mem_funct3(exmem_mem_funct3),
+        .exmem_suppress_mem(exmem_suppress_mem),
         // Data memory interface 
         .dmem_addr      (dmem_addr), 
         .dmem_wdata     (dmem_wdata), 
@@ -357,18 +418,41 @@ module riscv_cpu_top (
         .stall          (stall) 
     ); 
  
-    // --------------------------------------------------------------- 
-    // Forwarding Unit 
-    // --------------------------------------------------------------- 
-    forwarding_unit u_forwarding_unit ( 
-        .idex_rs1_addr  (idex_rs1_addr), 
-        .idex_rs2_addr  (idex_rs2_addr), 
-        .exmem_rd_addr  (exmem_rd_addr), 
-        .exmem_reg_write(exmem_reg_write), 
-        .memwb_rd_addr  (memwb_rd_addr), 
-        .memwb_reg_write(memwb_reg_write), 
-        .forward_a      (forward_a), 
-        .forward_b      (forward_b) 
-    ); 
- 
+    // ---------------------------------------------------------------
+    // Forwarding Unit
+    // ---------------------------------------------------------------
+    forwarding_unit u_forwarding_unit (
+        .idex_rs1_addr  (idex_rs1_addr),
+        .idex_rs2_addr  (idex_rs2_addr),
+        .exmem_rd_addr  (exmem_rd_addr),
+        .exmem_reg_write(exmem_reg_write),
+        .memwb_rd_addr  (memwb_rd_addr),
+        .memwb_reg_write(memwb_reg_write),
+        .forward_a      (forward_a),
+        .forward_b      (forward_b)
+    );
+
+    // ---------------------------------------------------------------
+    // CSR Unit
+    // ---------------------------------------------------------------
+    csr_unit u_csr_unit (
+        .clk        (clk),
+        .rst_n      (rst_n),
+        // ID-stage read (CSR address comes from current IFID instruction)
+        .csr_raddr  (ifid_instruction[31:20]),
+        .csr_rdata  (id_csr_rdata),
+        // EX-stage write
+        .csr_wen    (ex_csr_wen),
+        .csr_waddr  (ex_csr_waddr),
+        .csr_wdata  (ex_csr_wdata),
+        // ECALL trap
+        .trap_ecall  (ex_trap_ecall),
+        .trap_epc    (ex_trap_epc),
+        .trap_mcause (ex_trap_mcause),
+        .trap_mtval  (ex_trap_mtval),
+        // Outputs to EX stage
+        .mtvec      (csr_mtvec),
+        .mepc       (csr_mepc)
+    );
+
 endmodule 

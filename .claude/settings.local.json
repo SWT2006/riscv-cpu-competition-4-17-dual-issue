@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xxd C:/Users/38560/Desktop/work/riscv-cpu-competition/validate/tests/isa/generated/rv32ui-p-add.dump)",
+      "Bash(ls C:/Users/38560/Desktop/work/riscv-cpu-competition/validate/tests/isa/generated/*.bin)",
+      "Bash(grep -v \"^$\")",
+      "Bash(iverilog --version)",
+      "Bash(python BinToMem_CLI.py)",
+      "Bash(python ../../tools/BinToMem_CLI.py ../tests/isa/generated/rv32ui-p-add.bin inst.data)",
+      "Bash(python compile_rtl.py ../..)",
+      "Bash(vvp out.vvp)",
+      "Bash(vvp debug.vvp)",
+      "Bash(python sim_new_nowave.py \"../../validate/tests/isa/generated/rv32ui-p-add.bin\" inst.data)",
+      "Bash(python test_all_isa.py)",
+      "Bash(python sim_new_nowave.py \"../../validate/tests/isa/generated/rv32um-p-mul.bin\" inst.data)",
+      "Bash(python sim_new_nowave.py \"../../validate/tests/isa/generated/rv32ui-p-fence_i.bin\" inst.data)",
+      "Bash(python \"C:\\\\Users\\\\38560\\\\Desktop\\\\work\\\\riscv-cpu-competition\\\\tools\\\\BinToMem_CLI.py\" \"C:\\\\Users\\\\38560\\\\Desktop\\\\work\\\\riscv-cpu-competition\\\\validate\\\\tests\\\\isa\\\\generated\\\\rv32ui-p-fence_i.bin\" /tmp/fence_i.data)",
+      "Read(//tmp/**)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(grep \"\\\\.bin$\")",
+      "Bash(grep -E \"\\\\.\\(s|hex|mem|bin\\)$\")",
+      "Bash(ls -1 /c/Users/38560/Desktop/work/riscv-cpu-competition/validate/tests/isa/generated/*.bin)",
+      "Bash(grep -c '' C:/Users/38560/Desktop/work/riscv-cpu-competition/validate/tests/riscv-compliance/riscv-test-suite/rv32i/references/*.reference_output)",
+      "Bash(sort -t: -k2 -n)"
+    ]
+  }
+}

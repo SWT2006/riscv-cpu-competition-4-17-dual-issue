@@ -4,9 +4,13 @@
 // Description: SoC wrapper - integrates CPU, memories, and basic peripherals 
 //              (UART, GPIO/LED, seven-segment display) 
 //============================================================================ 
-module riscv_soc ( 
-    input  wire        clk, 
-    input  wire        rst_n, 
+module riscv_soc #(
+    // Set to a hex file path for FPGA synthesis; leave empty for simulation
+    // (testbench loads memory directly via $readmemh hierarchy access).
+    parameter INIT_FILE = ""
+) (
+    input  wire        clk,
+    input  wire        rst_n,
     // GPIO 
     output reg  [31:0] gpio_out, 
     input  wire [31:0] gpio_in, 
@@ -45,16 +49,26 @@ module riscv_soc (
         .dmem_ren   (dmem_ren) 
     ); 
  
-    // --------------------------------------------------------------- 
-    // Instruction Memory 
-    // --------------------------------------------------------------- 
-    instruction_memory #( 
-        .MEM_SIZE  (8192), 
-        .INIT_FILE ("program.hex") 
-    ) u_imem ( 
-        .addr  (imem_addr), 
-        .rdata (imem_rdata) 
-    ); 
+    // ---------------------------------------------------------------
+    // Instruction Memory
+    // Write port enables FENCE.I to work: stores to the imem address
+    // range (0x0000_0000..0x0000_7FFF) are also written to imem so
+    // subsequent instruction fetches see the updated code.
+    // ---------------------------------------------------------------
+    wire is_imem_range = (dmem_addr[31:15] == 17'h0);  // addr < 0x8000
+
+    instruction_memory #(
+        .MEM_SIZE  (8192),
+        .INIT_FILE (INIT_FILE)
+    ) u_imem (
+        .clk   (clk),
+        .addr  (imem_addr),
+        .rdata (imem_rdata),
+        .wen   (dmem_wen & is_imem_range),
+        .waddr (dmem_addr),
+        .wdata (dmem_wdata),
+        .wmask (dmem_wmask)
+    );
  
     // --------------------------------------------------------------- 
     // Memory Map: 

@@ -29,8 +29,12 @@ module imm_gen (
                 imm = {{11{instruction[31]}}, instruction[31], instruction[19:12], 
                         instruction[20], instruction[30:21], 1'b0}; 
             end 
-            default: begin 
-                imm = 32'b0; 
+            // FENCE / FENCE.I: produce imm=4 so JAL-style branching targets PC+4
+            7'b0001111: begin
+                imm = 32'd4;
+            end
+            default: begin
+                imm = 32'b0;
             end 
         endcase 
     end 
