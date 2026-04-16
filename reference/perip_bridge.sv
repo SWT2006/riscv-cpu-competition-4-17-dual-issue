@@ -48,44 +48,34 @@ module perip_bridge(
     localparam CNT_STOP_CMD  = 32'hFFFF_FFFF;
 
     logic [31:0] LED;
-    logic [31:0] seg_wdata, cnt_rdata, mmio_rdata, dram_rdata;
+    logic [31:0] seg_wdata, cnt_rdata, dram_rdata;
     logic [39:0] seg_output;
     logic cnt_enable_cfg;
 
-    // we don't care perip_mask in LED, SEG, SW & KEY, only care in DRAM
+    // ---- Address decode ----
+    // DRAM: 0x80100000–0x8013FFFF ⇒ addr[31:18] == 14'h2004
+    // Single 14-bit compare instead of two 32-bit >= / < comparisons.
+    wire dram_sel = (perip_addr[31:18] == 14'h2004);
+    // MMIO: 0x802000xx ⇒ addr[31:8] == 24'h802000
+    wire mmio_sel = (perip_addr[31:8] == 24'h802000);
+
     // write process
     always_ff @(posedge clk) begin
         if (rst) begin
             LED            <= 32'd0;
             seg_wdata      <= 32'd0;
             cnt_enable_cfg <= 1'b0;
-        end else if (perip_wen) begin
-            case (perip_addr)
-                LED_ADDR:   LED <= perip_wdata;
-                SEG_ADDR:   seg_wdata <= perip_wdata;
-                CNT_ADDR: begin
-                    if (perip_wdata == CNT_START_CMD) begin
+        end else if (perip_wen & mmio_sel) begin
+            case (perip_addr[7:0])
+                8'h40:   LED <= perip_wdata;
+                8'h20:   seg_wdata <= perip_wdata;
+                8'h50: begin
+                    if (perip_wdata == CNT_START_CMD)
                         cnt_enable_cfg <= 1'b1;
-                    end else if (perip_wdata == CNT_STOP_CMD) begin
+                    else if (perip_wdata == CNT_STOP_CMD)
                         cnt_enable_cfg <= 1'b0;
-                    end
                 end
             endcase
-        end
-    end
-
-    // read process: in one cycle
-    always_comb begin
-        if (~perip_wen) begin
-            case (perip_addr)
-                SW0_ADDR:  mmio_rdata = virtual_sw_input[31:0];
-                SW1_ADDR:  mmio_rdata = virtual_sw_input[63:32];
-                KEY_ADDR:  mmio_rdata = {24'd0, virtual_key_input};
-                SEG_ADDR:  mmio_rdata = seg_wdata;
-                default:   mmio_rdata = 32'hDEAD_BEEF;
-            endcase
-        end else begin
-            mmio_rdata = 32'h0;
         end
     end
 
@@ -107,13 +97,13 @@ module perip_bridge(
     assign seg_output[37] = 0;
     
 
-    // dram rw
+    // dram rw — use pre-decoded dram_sel instead of inline range comparison
     dram_driver dram_driver_inst (
         .clk				(clk),
         .perip_addr			(perip_addr[17:0]),
         .perip_wdata		(perip_wdata),
         .perip_mask			(perip_mask),
-        .dram_wen 			(perip_wen & (perip_addr >= DRAM_ADDR_START && perip_addr < DRAM_ADDR_END)),
+        .dram_wen 			(perip_wen & dram_sel),
         .perip_rdata		(dram_rdata)
     );
 
@@ -126,12 +116,24 @@ module perip_bridge(
         .perip_rdata		(cnt_rdata)
     );
 
-    assign perip_rdata = {32{perip_addr == SW0_ADDR}} & mmio_rdata |
-                        {32{perip_addr == SW1_ADDR}} & mmio_rdata |
-                        {32{perip_addr == KEY_ADDR}} & mmio_rdata |
-                        {32{perip_addr == SEG_ADDR}} & mmio_rdata |
-                        {32{perip_addr >= DRAM_ADDR_START && perip_addr < DRAM_ADDR_END}} & dram_rdata |
-                        {32{perip_addr == CNT_ADDR}} & cnt_rdata;
+    // Read data mux: priority DRAM → MMIO → CNT
+    // Single mux tree instead of 6 parallel AND-OR terms with full-width
+    // address comparators.  DRAM is the hot path; MMIO/CNT are rare reads.
+    always_comb begin
+        if (dram_sel)
+            perip_rdata = dram_rdata;
+        else if (mmio_sel) begin
+            case (perip_addr[7:0])
+                8'h00:   perip_rdata = virtual_sw_input[31:0];
+                8'h04:   perip_rdata = virtual_sw_input[63:32];
+                8'h10:   perip_rdata = {24'd0, virtual_key_input};
+                8'h20:   perip_rdata = seg_wdata;
+                8'h50:   perip_rdata = cnt_rdata;
+                default: perip_rdata = 32'h0;
+            endcase
+        end else
+            perip_rdata = 32'h0;
+    end
     
     assign virtual_led_output = LED;
     assign virtual_seg_output = seg_output;

@@ -42,8 +42,8 @@ module counter(
     logic [15:0] cnt_1ms;
     logic [31:0] cnt_ms_bin;
     logic [31:0] cnt_ms_gray;
-    logic cnt_enable_cnt_d1, cnt_enable_cnt_d2;
-    logic [31:0] cnt_gray_cpu_d1, cnt_gray_cpu_d2;
+    (* ASYNC_REG = "TRUE" *) logic cnt_enable_cnt_d1, cnt_enable_cnt_d2;
+    (* ASYNC_REG = "TRUE" *) logic [31:0] cnt_gray_cpu_d1, cnt_gray_cpu_d2;
 
     // CPU->counter CDC: synchronize level control into cnt_clk domain.
     always_ff @(posedge cnt_clk) begin

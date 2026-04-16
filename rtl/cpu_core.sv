@@ -145,6 +145,7 @@ module cpu_core (
         .branch_target    (ex_redirect_target),    // correct redirect target
         .irom_word_addr   (irom_addr),
         .irom_data        (irom_data),
+        // (BHT feedback removed — BTFNT is purely static, no EX feedback)
         .pc_out           (if_pc),
         .pc_plus4         (if_pc_plus4),
         .instruction      (if_instruction),
