@@ -2,9 +2,9 @@
 # DESCRIPTION: Verilator output: Makefile for building Verilated archive or executable
 #
 # Execute this makefile from the object directory:
-#    make -f Vsim_soc.mk
+#    make -f Vtb_coe.mk
 
-default: libVsim_soc
+default: Vtb_coe
 
 ### Constants...
 # Perl executable (from $PERL, defaults to 'perl' if not set)
@@ -32,11 +32,13 @@ VM_SC_TARGET_ARCH = mingw32
 
 ### Vars...
 # Design prefix (from --prefix)
-VM_PREFIX = Vsim_soc
+VM_PREFIX = Vtb_coe
 # Module prefix (from --prefix)
-VM_MODPREFIX = Vsim_soc
+VM_MODPREFIX = Vtb_coe
 # User CFLAGS (from -CFLAGS on Verilator command line)
 VM_USER_CFLAGS = \
+  -O3 \
+  -DVL_TIME_CONTEXT \
 
 # User LDLIBS (from -LDFLAGS on Verilator command line)
 VM_USER_LDLIBS = \
@@ -50,12 +52,16 @@ VM_USER_DIR = \
 
 ### Default rules...
 # Include list of all generated classes
-include Vsim_soc_classes.mk
+include Vtb_coe_classes.mk
 # Include global rules
 include $(VERILATOR_ROOT)/include/verilated.mk
 
-### Library rules (default lib mode)
-libVsim_soc.a: $(VK_OBJS) $(VK_USER_OBJS) $(VM_HIER_LIBS)
-libverilated.a: $(VK_GLOBAL_OBJS)
-libVsim_soc: libVsim_soc.a libverilated.a $(VM_PREFIX)__ALL.a
+### Executable rules... (from --exe)
+VPATH += $(VM_USER_DIR)
+
+
+### Link rules... (from --exe)
+Vtb_coe: $(VK_USER_OBJS) $(VK_GLOBAL_OBJS) $(VM_PREFIX)__ALL.a $(VM_HIER_LIBS)
+	$(LINK) $(LDFLAGS) $^ $(LOADLIBES) $(LDLIBS) $(LIBS) $(SC_LIBS) -o $@
+
 # Verilated -*- Makefile -*-

@@ -4,6 +4,10 @@
 // hold:  keep current values (multi-cycle EX operation, e.g. divide).
 // Priority: reset > flush > hold > normal latch.
 // All control bits — including ecall — are explicitly zeroed on flush.
+// id_predicted:        carries the IF-stage prediction flag so EX can detect
+//                      mispredictions (direction mismatch).
+// id_predicted_target: carries the predicted next-PC so EX can detect
+//                      target mismatches (for RAS-predicted JALR returns).
 module pipe_idex (
     input  wire        clk,
     input  wire        cpu_rst,
@@ -35,6 +39,8 @@ module pipe_idex (
     input  wire        id_csr_op,
     input  wire [31:0] id_csr_rdata,
     input  wire [11:0] id_csr_addr,
+    input  wire        id_predicted,
+    input  wire [31:0] id_predicted_target,
     // Outputs to EX
     output reg  [31:0] idex_pc,
     output reg  [31:0] idex_pc_plus4,
@@ -60,61 +66,67 @@ module pipe_idex (
     output reg         idex_mret,
     output reg         idex_csr_op,
     output reg  [31:0] idex_csr_rdata,
-    output reg  [11:0] idex_csr_addr
+    output reg  [11:0] idex_csr_addr,
+    output reg         idex_predicted,
+    output reg  [31:0] idex_predicted_target
 );
     always @(posedge clk) begin
         if (cpu_rst || flush) begin
-            idex_pc         <= 32'b0;
-            idex_pc_plus4   <= 32'b0;
-            idex_rs1_data   <= 32'b0;
-            idex_rs2_data   <= 32'b0;
-            idex_imm        <= 32'b0;
-            idex_rs1_addr   <= 5'b0;
-            idex_rs2_addr   <= 5'b0;
-            idex_rd_addr    <= 5'b0;
-            idex_alu_op     <= 5'b0;
-            idex_alu_src    <= 1'b0;
-            idex_mem_read   <= 1'b0;
-            idex_mem_write  <= 1'b0;
-            idex_mem_funct3 <= 3'b0;
-            idex_reg_write  <= 1'b0;
-            idex_wb_sel     <= 2'b0;
-            idex_branch     <= 1'b0;
-            idex_jal        <= 1'b0;
-            idex_jalr       <= 1'b0;
-            idex_auipc      <= 1'b0;
-            idex_funct3     <= 3'b0;
-            idex_ecall      <= 1'b0;  // must be explicitly cleared
-            idex_mret       <= 1'b0;
-            idex_csr_op     <= 1'b0;
-            idex_csr_rdata  <= 32'b0;
-            idex_csr_addr   <= 12'b0;
+            idex_pc               <= 32'b0;
+            idex_pc_plus4         <= 32'b0;
+            idex_rs1_data         <= 32'b0;
+            idex_rs2_data         <= 32'b0;
+            idex_imm              <= 32'b0;
+            idex_rs1_addr         <= 5'b0;
+            idex_rs2_addr         <= 5'b0;
+            idex_rd_addr          <= 5'b0;
+            idex_alu_op           <= 5'b0;
+            idex_alu_src          <= 1'b0;
+            idex_mem_read         <= 1'b0;
+            idex_mem_write        <= 1'b0;
+            idex_mem_funct3       <= 3'b0;
+            idex_reg_write        <= 1'b0;
+            idex_wb_sel           <= 2'b0;
+            idex_branch           <= 1'b0;
+            idex_jal              <= 1'b0;
+            idex_jalr             <= 1'b0;
+            idex_auipc            <= 1'b0;
+            idex_funct3           <= 3'b0;
+            idex_ecall            <= 1'b0;
+            idex_mret             <= 1'b0;
+            idex_csr_op           <= 1'b0;
+            idex_csr_rdata        <= 32'b0;
+            idex_csr_addr         <= 12'b0;
+            idex_predicted        <= 1'b0;
+            idex_predicted_target <= 32'b0;
         end else if (!hold) begin
-            idex_pc         <= id_pc;
-            idex_pc_plus4   <= id_pc_plus4;
-            idex_rs1_data   <= id_rs1_data;
-            idex_rs2_data   <= id_rs2_data;
-            idex_imm        <= id_imm;
-            idex_rs1_addr   <= id_rs1_addr;
-            idex_rs2_addr   <= id_rs2_addr;
-            idex_rd_addr    <= id_rd_addr;
-            idex_alu_op     <= id_alu_op;
-            idex_alu_src    <= id_alu_src;
-            idex_mem_read   <= id_mem_read;
-            idex_mem_write  <= id_mem_write;
-            idex_mem_funct3 <= id_mem_funct3;
-            idex_reg_write  <= id_reg_write;
-            idex_wb_sel     <= id_wb_sel;
-            idex_branch     <= id_branch;
-            idex_jal        <= id_jal;
-            idex_jalr       <= id_jalr;
-            idex_auipc      <= id_auipc;
-            idex_funct3     <= id_funct3;
-            idex_ecall      <= id_ecall;
-            idex_mret       <= id_mret;
-            idex_csr_op     <= id_csr_op;
-            idex_csr_rdata  <= id_csr_rdata;
-            idex_csr_addr   <= id_csr_addr;
+            idex_pc               <= id_pc;
+            idex_pc_plus4         <= id_pc_plus4;
+            idex_rs1_data         <= id_rs1_data;
+            idex_rs2_data         <= id_rs2_data;
+            idex_imm              <= id_imm;
+            idex_rs1_addr         <= id_rs1_addr;
+            idex_rs2_addr         <= id_rs2_addr;
+            idex_rd_addr          <= id_rd_addr;
+            idex_alu_op           <= id_alu_op;
+            idex_alu_src          <= id_alu_src;
+            idex_mem_read         <= id_mem_read;
+            idex_mem_write        <= id_mem_write;
+            idex_mem_funct3       <= id_mem_funct3;
+            idex_reg_write        <= id_reg_write;
+            idex_wb_sel           <= id_wb_sel;
+            idex_branch           <= id_branch;
+            idex_jal              <= id_jal;
+            idex_jalr             <= id_jalr;
+            idex_auipc            <= id_auipc;
+            idex_funct3           <= id_funct3;
+            idex_ecall            <= id_ecall;
+            idex_mret             <= id_mret;
+            idex_csr_op           <= id_csr_op;
+            idex_csr_rdata        <= id_csr_rdata;
+            idex_csr_addr         <= id_csr_addr;
+            idex_predicted        <= id_predicted;
+            idex_predicted_target <= id_predicted_target;
         end
         // hold && !cpu_rst && !flush: retain current values (div stall)
     end

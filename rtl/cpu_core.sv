@@ -25,9 +25,13 @@ module cpu_core (
 
     // IF outputs
     wire [31:0] if_pc, if_pc_plus4, if_instruction;
+    wire        if_predicted;          // IF-stage prediction active
+    wire [31:0] if_predicted_target;   // predicted next-PC (for EX verification)
 
     // IF/ID register outputs
     wire [31:0] ifid_pc, ifid_pc_plus4, ifid_instruction;
+    wire        ifid_predicted;        // predicted flag from IF/ID register
+    wire [31:0] ifid_predicted_target; // predicted target from IF/ID register
 
     // ID outputs
     wire [31:0] id_rs1_data, id_rs2_data, id_imm, id_csr_rdata;
@@ -49,6 +53,8 @@ module cpu_core (
     wire [1:0]  idex_wb_sel;
     wire        idex_branch, idex_jal, idex_jalr, idex_auipc;
     wire        idex_ecall, idex_mret, idex_csr_op;
+    wire        idex_predicted;        // predicted flag from ID/EX register
+    wire [31:0] idex_predicted_target; // predicted target from ID/EX register
 
     // EX outputs
     wire [31:0] ex_alu_result, ex_rs2_data_fwd;
@@ -99,39 +105,71 @@ module cpu_core (
     // Combined stall: load-use hazard OR EX multi-cycle operation
     wire pipeline_stall = hz_stall | ex_stall;
 
-    // Flush: any taken branch or trap redirects the PC
-    wire flush = ex_branch_taken;
+    // -----------------------------------------------------------------
+    // Mispredict detection (unified for all prediction sources)
+    //
+    // Direction mismatch: the actual taken/not-taken outcome differs from
+    // what IF predicted.  Covers:
+    //   - Forward branch taken (predicted not-taken) → redirect to target
+    //   - Backward branch not-taken (predicted taken) → redirect to PC+4
+    //   - Unpredicted JALR/ECALL/MRET (predicted=0, taken=1) → redirect
+    //   - Correctly predicted JAL/backward-branch → no redirect
+    //
+    // Target mismatch: RAS-predicted JALR return was taken but the actual
+    // target (computed from rs1+imm) differs from what the RAS predicted.
+    // Only checked for JALR because branch/JAL targets are deterministic
+    // (PC+imm matches in both IF and EX).
+    // -----------------------------------------------------------------
+    wire direction_mismatch = ex_branch_taken ^ idex_predicted;
+    wire target_mismatch    = idex_predicted & ex_branch_taken & idex_jalr
+                            & (ex_branch_target != idex_predicted_target);
+    wire ex_redirect = direction_mismatch | target_mismatch;
+
+    // Redirect target:
+    //   - Predicted taken but actually not taken → fall through to PC+4
+    //   - Otherwise (not predicted, or target mismatch) → actual branch target
+    wire [31:0] ex_redirect_target = (idex_predicted & ~ex_branch_taken)
+                                   ? idex_pc_plus4 : ex_branch_target;
+
+    // Flush: only on misprediction
+    wire flush = ex_redirect;
 
     // -------------------------------------------------------------------
     // Stage 1: IF
     // -------------------------------------------------------------------
     stage_if u_if (
-        .clk           (cpu_clk),
-        .cpu_rst       (cpu_rst),
-        .stall         (pipeline_stall),
-        .branch_taken  (ex_branch_taken),
-        .branch_target (ex_branch_target),
-        .irom_word_addr(irom_addr),
-        .irom_data     (irom_data),
-        .pc_out        (if_pc),
-        .pc_plus4      (if_pc_plus4),
-        .instruction   (if_instruction)
+        .clk              (cpu_clk),
+        .cpu_rst          (cpu_rst),
+        .stall            (pipeline_stall),
+        .branch_taken     (ex_redirect),          // mispredict recovery
+        .branch_target    (ex_redirect_target),    // correct redirect target
+        .irom_word_addr   (irom_addr),
+        .irom_data        (irom_data),
+        .pc_out           (if_pc),
+        .pc_plus4         (if_pc_plus4),
+        .instruction      (if_instruction),
+        .predicted        (if_predicted),
+        .predicted_target (if_predicted_target)
     );
 
     // -------------------------------------------------------------------
     // IF/ID register
     // -------------------------------------------------------------------
     pipe_ifid u_pipe_ifid (
-        .clk             (cpu_clk),
-        .cpu_rst         (cpu_rst),
-        .stall           (pipeline_stall),
-        .flush           (flush),
-        .if_pc           (if_pc),
-        .if_pc_plus4     (if_pc_plus4),
-        .if_instruction  (if_instruction),
-        .ifid_pc         (ifid_pc),
-        .ifid_pc_plus4   (ifid_pc_plus4),
-        .ifid_instruction(ifid_instruction)
+        .clk                  (cpu_clk),
+        .cpu_rst              (cpu_rst),
+        .stall                (pipeline_stall),
+        .flush                (flush),
+        .if_pc                (if_pc),
+        .if_pc_plus4          (if_pc_plus4),
+        .if_instruction       (if_instruction),
+        .if_predicted         (if_predicted),
+        .if_predicted_target  (if_predicted_target),
+        .ifid_pc              (ifid_pc),
+        .ifid_pc_plus4        (ifid_pc_plus4),
+        .ifid_instruction     (ifid_instruction),
+        .ifid_predicted       (ifid_predicted),
+        .ifid_predicted_target(ifid_predicted_target)
     );
 
     // -------------------------------------------------------------------
@@ -244,6 +282,8 @@ module cpu_core (
         .id_csr_op      (id_csr_op),
         .id_csr_rdata   (id_csr_rdata),
         .id_csr_addr    (id_csr_addr),
+        .id_predicted         (ifid_predicted),
+        .id_predicted_target  (ifid_predicted_target),
         .idex_pc        (idex_pc),
         .idex_pc_plus4  (idex_pc_plus4),
         .idex_rs1_data  (idex_rs1_data),
@@ -268,7 +308,9 @@ module cpu_core (
         .idex_mret      (idex_mret),
         .idex_csr_op    (idex_csr_op),
         .idex_csr_rdata (idex_csr_rdata),
-        .idex_csr_addr  (idex_csr_addr)
+        .idex_csr_addr  (idex_csr_addr),
+        .idex_predicted       (idex_predicted),
+        .idex_predicted_target(idex_predicted_target)
     );
 
     // -------------------------------------------------------------------

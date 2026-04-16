@@ -5,20 +5,19 @@
 // The class here is then constructed to instantiate the design.
 // See the Verilator manual for examples.
 
-#ifndef VERILATED_VSIM_SOC_H_
-#define VERILATED_VSIM_SOC_H_  // guard
+#ifndef VERILATED_VTB_COE_H_
+#define VERILATED_VTB_COE_H_  // guard
 
 #include "verilated.h"
-#include "svdpi.h"
 
-class Vsim_soc__Syms;
-class Vsim_soc___024root;
+class Vtb_coe__Syms;
+class Vtb_coe___024root;
 
 // This class is the main interface to the Verilated model
-class alignas(VL_CACHE_LINE_BYTES) Vsim_soc VL_NOT_FINAL : public VerilatedModel {
+class alignas(VL_CACHE_LINE_BYTES) Vtb_coe VL_NOT_FINAL : public VerilatedModel {
   private:
     // Symbol table holding complete model state (owned by this class)
-    Vsim_soc__Syms* const vlSymsp;
+    Vtb_coe__Syms* const vlSymsp;
 
   public:
 
@@ -29,8 +28,6 @@ class alignas(VL_CACHE_LINE_BYTES) Vsim_soc VL_NOT_FINAL : public VerilatedModel
     // PORTS
     // The application code writes and reads these signals to
     // propagate new values into/out from the Verilated model.
-    VL_IN8(&clk,0,0);
-    VL_IN8(&rst_n,0,0);
 
     // CELLS
     // Public to allow access to /* verilator public */ items.
@@ -38,19 +35,19 @@ class alignas(VL_CACHE_LINE_BYTES) Vsim_soc VL_NOT_FINAL : public VerilatedModel
 
     // Root instance pointer to allow access to model internals,
     // including inlined /* verilator public_flat_* */ items.
-    Vsim_soc___024root* const rootp;
+    Vtb_coe___024root* const rootp;
 
     // CONSTRUCTORS
     /// Construct the model; called by application code
     /// If contextp is null, then the model will use the default global context
     /// If name is "", then makes a wrapper with a
     /// single model invisible with respect to DPI scope names.
-    explicit Vsim_soc(VerilatedContext* contextp, const char* name = "TOP");
-    explicit Vsim_soc(const char* name = "TOP");
+    explicit Vtb_coe(VerilatedContext* contextp, const char* name = "TOP");
+    explicit Vtb_coe(const char* name = "TOP");
     /// Destroy the model; called (often implicitly) by application code
-    virtual ~Vsim_soc();
+    virtual ~Vtb_coe();
   private:
-    VL_UNCOPYABLE(Vsim_soc);  ///< Copying not allowed
+    VL_UNCOPYABLE(Vtb_coe);  ///< Copying not allowed
 
   public:
     // API METHODS

@@ -1,0 +1,32 @@
+// Branch prediction comprehensive test
+// Tests: backward branch (BTFNT), forward branch, JAL, JALR call/return (RAS)
+//
+// Expected: x1=0, x2=0x39, x3=0, x4=0x55, x5=1, x6=0, x7=0x77, x8=0x33
+// DRAM[0]=0x39, DRAM[4]=0x55, DRAM[8]=0, DRAM[12]=0x77, DRAM[16]=0, DRAM[20]=0x33
+
+00300093 // W0  0x80000000: addi x1, x0, 3        (counter=3)
+00000113 // W1  0x80000004: addi x2, x0, 0        (accumulator=0)
+00110133 // W2  0x80000008: add  x2, x2, x1  LOOP (accum += counter)
+FFF08093 // W3  0x8000000C: addi x1, x1, -1       (counter--)
+FE009CE3 // W4  0x80000010: bne  x1, x0, -8       (backward to W2, predict taken)
+00008463 // W5  0x80000014: beq  x1, x0, +8       (forward taken, mispredict)
+0FF00193 // W6  0x80000018: addi x3, x0, 0xFF     (SKIPPED)
+05500213 // W7  0x8000001C: addi x4, x0, 0x55     (target)
+00100293 // W8  0x80000020: addi x5, x0, 1
+00029463 // W9  0x80000024: bne  x5, x0, +8       (forward taken, mispredict)
+0DD00313 // W10 0x80000028: addi x6, x0, 0xDD     (SKIPPED)
+010000EF // W11 0x8000002C: jal  ra, +16           (call func at W15)
+07700393 // W12 0x80000030: addi x7, x0, 0x77     (after return)
+0140006F // W13 0x80000034: jal  x0, +20           (jump to stores at W18)
+00000013 // W14 0x80000038: nop                    (padding)
+03300413 // W15 0x8000003C: addi x8, x0, 0x33     FUNC
+00810133 // W16 0x80000040: add  x2, x2, x8       (x2 = 6+0x33 = 0x39)
+00008067 // W17 0x80000044: jalr x0, 0(ra)        (return via RAS)
+80100E37 // W18 0x80000048: lui  x28, 0x80100     STORES
+002E2023 // W19 0x8000004C: sw   x2, 0(x28)       (DRAM[0]=x2)
+004E2223 // W20 0x80000050: sw   x4, 4(x28)       (DRAM[4]=x4)
+003E2423 // W21 0x80000054: sw   x3, 8(x28)       (DRAM[8]=x3)
+007E2623 // W22 0x80000058: sw   x7, 12(x28)      (DRAM[12]=x7)
+006E2823 // W23 0x8000005C: sw   x6, 16(x28)      (DRAM[16]=x6)
+008E2A23 // W24 0x80000060: sw   x8, 20(x28)      (DRAM[20]=x8)
+0000006F // W25 0x80000064: jal  x0, 0            (halt self-loop)

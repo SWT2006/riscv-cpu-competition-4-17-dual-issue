@@ -2,13 +2,13 @@
 # DESCRIPTION: Verilator output: Make include file with class lists
 #
 # This file lists generated Verilated files, for including in higher level makefiles.
-# See Vsim_soc.mk for the caller.
+# See Vtb_coe.mk for the caller.
 
 ### Switches...
 # C11 constructs required?  0/1 (always on now)
 VM_C11 = 1
 # Timing enabled?  0/1
-VM_TIMING = 0
+VM_TIMING = 1
 # Coverage output mode?  0/1 (from --coverage)
 VM_COVERAGE = 0
 # Parallel builds?  0/1 (from --output-split)
@@ -25,28 +25,28 @@ VM_TRACE_VCD = 0
 ### Object file lists...
 # Generated module classes, fast-path, compile with highest optimization
 VM_CLASSES_FAST += \
-  Vsim_soc \
-  Vsim_soc___024root__DepSet_hf6047da2__0 \
-  Vsim_soc___024root__DepSet_h261a1e96__0 \
+  Vtb_coe \
+  Vtb_coe___024root__DepSet_h0dea7a2f__0 \
+  Vtb_coe___024root__DepSet_haf4fb59c__0 \
+  Vtb_coe__main \
 
 # Generated module classes, non-fast-path, compile with low/medium optimization
 VM_CLASSES_SLOW += \
-  Vsim_soc___024root__Slow \
-  Vsim_soc___024root__DepSet_hf6047da2__0__Slow \
-  Vsim_soc___024root__DepSet_h261a1e96__0__Slow \
+  Vtb_coe___024root__Slow \
+  Vtb_coe___024root__DepSet_h0dea7a2f__0__Slow \
+  Vtb_coe___024root__DepSet_haf4fb59c__0__Slow \
 
 # Generated support classes, fast-path, compile with highest optimization
 VM_SUPPORT_FAST += \
-  Vsim_soc__Dpi \
 
 # Generated support classes, non-fast-path, compile with low/medium optimization
 VM_SUPPORT_SLOW += \
-  Vsim_soc__Syms \
+  Vtb_coe__Syms \
 
 # Global classes, need linked once per executable, fast-path, compile with highest optimization
 VM_GLOBAL_FAST += \
   verilated \
-  verilated_dpi \
+  verilated_timing \
   verilated_threads \
 
 # Global classes, need linked once per executable, non-fast-path, compile with low/medium optimization

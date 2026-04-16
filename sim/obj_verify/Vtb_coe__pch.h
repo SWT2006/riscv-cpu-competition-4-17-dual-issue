@@ -3,11 +3,11 @@
 //
 // Internal details; most user sources do not need this header,
 // unless using verilator public meta comments.
-// Suggest use Vsim_soc.h instead.
+// Suggest use Vtb_coe.h instead.
 
 
-#ifndef VERILATED_VSIM_SOC__PCH_H_
-#define VERILATED_VSIM_SOC__PCH_H_  // guard
+#ifndef VERILATED_VTB_COE__PCH_H_
+#define VERILATED_VTB_COE__PCH_H_  // guard
 
 // GCC and Clang only will precompile headers (PCH) for the first header.
 // So, make sure this is the one and only PCH.
@@ -19,10 +19,9 @@
 
 
 #include "verilated.h"
-#include "verilated_dpi.h"
 
-#include "Vsim_soc__Syms.h"
-#include "Vsim_soc.h"
+#include "Vtb_coe__Syms.h"
+#include "Vtb_coe.h"
 
 // Additional include files added using '--compiler-include'
 
