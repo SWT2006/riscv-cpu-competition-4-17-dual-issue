@@ -8,6 +8,8 @@
 //   MMIO reads:      return 0 (unused in simulation)
 //   MMIO writes:     ignored (unused in simulation)
 //
+// 2-wide fetch: provides two instruction reads per cycle (PC and PC+4).
+//
 // Reset: active-high cpu_rst (converted from active-low rst_n).
 // =============================================================================
 `timescale 1ns/1ps
@@ -26,7 +28,8 @@ module sim_soc (
     // CPU ↔ memory wires
     // -----------------------------------------------------------------------
     wire [31:0] irom_addr;          // full 32-bit PC from cpu_core
-    wire [31:0] irom_data;
+    wire [31:0] irom_data_0;       // instruction at PC (slot A)
+    wire [31:0] irom_data_1;       // instruction at PC+4 (slot B)
 
     wire [31:0] perip_addr;
     wire        perip_wen;
@@ -35,14 +38,15 @@ module sim_soc (
     wire [31:0] perip_rdata;
 
     // -----------------------------------------------------------------------
-    // CPU core (5-stage pipeline)
+    // CPU core (2-wide superscalar pipeline)
     // Instance must be u_cpu so testbench can probe u_cpu.u_stage_id.regfile
     // -----------------------------------------------------------------------
     cpu_core u_cpu (
         .cpu_clk    (clk),
         .cpu_rst    (cpu_rst),
         .irom_addr  (irom_addr),
-        .irom_data  (irom_data),
+        .irom_data_0(irom_data_0),
+        .irom_data_1(irom_data_1),
         .perip_addr (perip_addr),
         .perip_wen  (perip_wen),
         .perip_mask (perip_mask),
@@ -52,15 +56,17 @@ module sim_soc (
 
     // -----------------------------------------------------------------------
     // Instruction ROM: 4096 words (16 KB), word-addressed by pc[13:2].
-    // Instance must be u_imem, array must be mem[], for testbench probing.
+    // Two combinational reads per cycle for 2-wide fetch.
+    // Instance must be u_imem, array must be imem[], for testbench probing.
     // -----------------------------------------------------------------------
     reg [31:0] imem [0:4095];
-    assign irom_data = imem[irom_addr[13:2]];
+    assign irom_data_0 = imem[irom_addr[13:2]];
+    assign irom_data_1 = imem[irom_addr[13:2] + 12'd1];
 
     // -----------------------------------------------------------------------
     // Data RAM: 65536 words (256 KB), word-addressed by perip_addr[17:2].
     // Active only for addresses in [DRAM_BASE, DRAM_END).
-    // Instance must be u_dmem, array must be mem[], for testbench probing.
+    // Instance must be u_dmem, array must be dmem[], for testbench probing.
     // -----------------------------------------------------------------------
     localparam [31:0] DRAM_BASE = 32'h8010_0000;
     localparam [31:0] DRAM_END  = 32'h8014_0000;

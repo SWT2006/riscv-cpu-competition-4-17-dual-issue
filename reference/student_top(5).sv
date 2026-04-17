@@ -36,10 +36,11 @@ module student_top#(
     output [P_SEG_CNT - 1:0]                    virtual_seg   
 );
 
-    // IROM
+    // IROM — 2-wide fetch for dual-issue pipeline
     logic [31:0] pc;
     logic [11:0] inst_addr;
-    logic [31:0] instruction;
+    logic [31:0] instruction_0;    // slot A: instruction at PC
+    logic [31:0] instruction_1;    // slot B: instruction at PC+4
 
     // perip
     logic [31:0] perip_addr, perip_wdata, perip_rdata;
@@ -53,21 +54,25 @@ module student_top#(
         .cpu_rst            (w_clk_rst),
         .cpu_clk            (w_cpu_clk),
 
-        // Interface to IROM
-        .irom_addr          (pc),             
-        .irom_data          (instruction),   
+        // Interface to IROM — 2-wide fetch
+        .irom_addr          (pc),
+        .irom_data_0        (instruction_0),
+        .irom_data_1        (instruction_1),
 
         // Interface to DRAM & periphera
-        .perip_addr         (perip_addr),     
-        .perip_wen          (perip_wen),     
-        .perip_mask         (perip_mask),   
-        .perip_wdata        (perip_wdata),    
-        .perip_rdata        (perip_rdata)     
+        .perip_addr         (perip_addr),
+        .perip_wen          (perip_wen),
+        .perip_mask         (perip_mask),
+        .perip_wdata        (perip_wdata),
+        .perip_rdata        (perip_rdata)
     );
 
-    IROM Mem_IROM (
-        .a          (inst_addr),
-        .spo        (instruction)
+    // Block-RAM IROM with dual read ports (replaces single-port Xilinx IP)
+    irom_driver Mem_IROM (
+        .clk        (w_cpu_clk),
+        .addr       (inst_addr),
+        .rdata_0    (instruction_0),
+        .rdata_1    (instruction_1)
     );
     
     perip_bridge bridge_inst (

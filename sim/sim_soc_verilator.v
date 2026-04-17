@@ -10,7 +10,8 @@ module sim_soc (
     wire cpu_rst = ~rst_n;
 
     wire [31:0] irom_addr;
-    wire [31:0] irom_data;
+    wire [31:0] irom_data_0;
+    wire [31:0] irom_data_1;
     wire [31:0] perip_addr;
     wire        perip_wen;
     wire [1:0]  perip_mask;
@@ -21,7 +22,8 @@ module sim_soc (
         .cpu_clk    (clk),
         .cpu_rst    (cpu_rst),
         .irom_addr  (irom_addr),
-        .irom_data  (irom_data),
+        .irom_data_0(irom_data_0),
+        .irom_data_1(irom_data_1),
         .perip_addr (perip_addr),
         .perip_wen  (perip_wen),
         .perip_mask (perip_mask),
@@ -29,9 +31,10 @@ module sim_soc (
         .perip_rdata(perip_rdata)
     );
 
-    // IROM: 4096 words
+    // IROM: 4096 words, 2-wide fetch
     reg [31:0] imem [0:4095];
-    assign irom_data = imem[irom_addr[13:2]];
+    assign irom_data_0 = imem[irom_addr[13:2]];
+    assign irom_data_1 = imem[irom_addr[13:2] + 12'd1];
 
     // DRAM: 65536 words
     localparam [31:0] DRAM_BASE = 32'h8010_0000;

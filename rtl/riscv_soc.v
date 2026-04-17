@@ -25,8 +25,9 @@
 // ---------------------------------------------------------------------------
 module sim_imem (
     input  wire        clk,
-    input  wire [12:0] raddr,   // word address for instruction fetch
-    output wire [31:0] rdata,
+    input  wire [12:0] raddr,   // word address for instruction fetch (slot A)
+    output wire [31:0] rdata_0, // instruction at PC (slot A)
+    output wire [31:0] rdata_1, // instruction at PC+4 (slot B)
     // Write port (mirrors data stores so self-modifying code works)
     input  wire        wen,
     input  wire [12:0] waddr,
@@ -35,7 +36,8 @@ module sim_imem (
 );
     reg [31:0] mem [0:8191];   // 8192 words = 32 KB
 
-    assign rdata = mem[raddr];
+    assign rdata_0 = mem[raddr];
+    assign rdata_1 = mem[raddr + 13'd1];
 
     always @(posedge clk) begin
         if (wen && wword)
@@ -153,7 +155,8 @@ module riscv_soc (
     // CPU ↔ memory wires
     // -----------------------------------------------------------------------
     wire [31:0] irom_addr;   // full 32-bit PC from cpu_core; sim uses irom_addr[14:2]
-    wire [31:0] irom_data;
+    wire [31:0] irom_data_0; // instruction at PC
+    wire [31:0] irom_data_1; // instruction at PC+4
 
     wire [31:0] perip_addr;
     wire        perip_wen;
@@ -162,14 +165,15 @@ module riscv_soc (
     wire [31:0] perip_rdata;
 
     // -----------------------------------------------------------------------
-    // CPU core (5-stage pipeline)
+    // CPU core (2-wide superscalar pipeline)
     // u_cpu must contain u_stage_id  (renamed in cpu_core.sv)
     // -----------------------------------------------------------------------
     cpu_core u_cpu (
         .cpu_clk    (clk),
         .cpu_rst    (cpu_rst),
         .irom_addr  (irom_addr),
-        .irom_data  (irom_data),
+        .irom_data_0(irom_data_0),
+        .irom_data_1(irom_data_1),
         .perip_addr (perip_addr),
         .perip_wen  (perip_wen),
         .perip_mask (perip_mask),
@@ -192,7 +196,8 @@ module riscv_soc (
     sim_imem u_imem (
         .clk    (clk),
         .raddr  (irom_addr[14:2]),
-        .rdata  (irom_data),
+        .rdata_0(irom_data_0),
+        .rdata_1(irom_data_1),
         .wen    (perip_wen),
         .waddr  (dmem_waddr),
         .wdata_w(dmem_merged),

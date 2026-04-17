@@ -11,15 +11,18 @@
 //   irom_addr [31:0] — full 32-bit program counter.
 //     student_top(5).sv receives this as "pc" and derives the 12-bit IROM
 //     word address internally:  inst_addr = pc[13:2]
+//   irom_data_0 — instruction at PC (slot A).
+//   irom_data_1 — instruction at PC+4 (slot B, 2-wide fetch).
 //   All other ports are passed through 1:1 to cpu_core.
 module myCPU (
     input  wire        cpu_rst,
     input  wire        cpu_clk,
 
-    // Instruction ROM interface
+    // Instruction ROM interface — 2-wide fetch
     // student_top slices irom_addr[13:2] to form the 12-bit IROM word address.
     output wire [31:0] irom_addr,
-    input  wire [31:0] irom_data,
+    input  wire [31:0] irom_data_0,    // instruction at PC
+    input  wire [31:0] irom_data_1,    // instruction at PC+4
 
     // Peripheral bus (DRAM + MMIO, routed through perip_bridge in student_top)
     output wire [31:0] perip_addr,
@@ -33,7 +36,8 @@ module myCPU (
         .cpu_clk     (cpu_clk),
         .cpu_rst     (cpu_rst),
         .irom_addr   (irom_addr),
-        .irom_data   (irom_data),
+        .irom_data_0 (irom_data_0),
+        .irom_data_1 (irom_data_1),
         .perip_addr  (perip_addr),
         .perip_wen   (perip_wen),
         .perip_mask  (perip_mask),

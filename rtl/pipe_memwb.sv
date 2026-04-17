@@ -1,49 +1,63 @@
 `timescale 1ns/1ps
-// MEM/WB pipeline register.
-// memwb_write_data: pre-computed writeback mux — same optimisation pattern as
-//                   exmem_fwd_data.  Removes one 3:1 mux from the
-//                   WB→ID bypass and WB→EX forwarding critical paths.
+// 2-wide MEM/WB pipeline register.
+//
+// Pre-computes writeback data for both pipes (removes 3:1 mux from
+// WB→ID bypass and WB→EX forwarding critical paths).
 module pipe_memwb (
     input  wire        clk,
     input  wire        cpu_rst,
-    // Inputs from MEM
-    input  wire [31:0] mem_pc_plus4,
-    input  wire [31:0] mem_alu_result,
-    input  wire [31:0] mem_read_data,
-    input  wire [4:0]  mem_rd_addr,
-    input  wire        mem_reg_write,
-    input  wire [1:0]  mem_wb_sel,
-    // Outputs to WB
-    output reg  [31:0] memwb_pc_plus4,
-    output reg  [31:0] memwb_alu_result,
-    output reg  [31:0] memwb_mem_data,
-    output reg  [4:0]  memwb_rd_addr,
-    output reg         memwb_reg_write,
-    output reg  [1:0]  memwb_wb_sel,
-    // Pre-computed writeback data: selects the correct source (ALU/MEM/PC+4)
-    // at registration time, so downstream consumers get a direct register output.
-    output reg  [31:0] memwb_write_data
+    // ---- Pipe A inputs ----
+    input  wire [31:0] mem_a_pc_plus4,
+    input  wire [31:0] mem_a_alu_result,
+    input  wire [31:0] mem_a_read_data,
+    input  wire [4:0]  mem_a_rd_addr,
+    input  wire        mem_a_reg_write,
+    input  wire [1:0]  mem_a_wb_sel,
+    // ---- Pipe B inputs ----
+    input  wire        mem_b_valid,
+    input  wire [31:0] mem_b_pc_plus4,
+    input  wire [31:0] mem_b_alu_result,
+    input  wire [31:0] mem_b_read_data,
+    input  wire [4:0]  mem_b_rd_addr,
+    input  wire        mem_b_reg_write,
+    input  wire [1:0]  mem_b_wb_sel,
+    // ---- Pipe A outputs ----
+    output reg  [4:0]  memwb_a_rd_addr,
+    output reg         memwb_a_reg_write,
+    output reg  [31:0] memwb_a_write_data,
+    // ---- Pipe B outputs ----
+    output reg         memwb_b_valid,
+    output reg  [4:0]  memwb_b_rd_addr,
+    output reg         memwb_b_reg_write,
+    output reg  [31:0] memwb_b_write_data
 );
+
     always @(posedge clk) begin
         if (cpu_rst) begin
-            memwb_pc_plus4   <= 32'b0;
-            memwb_alu_result <= 32'b0;
-            memwb_mem_data   <= 32'b0;
-            memwb_rd_addr    <= 5'b0;
-            memwb_reg_write  <= 1'b0;
-            memwb_wb_sel     <= 2'b0;
-            memwb_write_data <= 32'b0;
+            memwb_a_rd_addr    <= 5'b0;
+            memwb_a_reg_write  <= 1'b0;
+            memwb_a_write_data <= 32'b0;
+            memwb_b_valid      <= 1'b0;
+            memwb_b_rd_addr    <= 5'b0;
+            memwb_b_reg_write  <= 1'b0;
+            memwb_b_write_data <= 32'b0;
         end else begin
-            memwb_pc_plus4   <= mem_pc_plus4;
-            memwb_alu_result <= mem_alu_result;
-            memwb_mem_data   <= mem_read_data;
-            memwb_rd_addr    <= mem_rd_addr;
-            memwb_reg_write  <= mem_reg_write;
-            memwb_wb_sel     <= mem_wb_sel;
-            // Pre-compute the WB mux: same logic as stage_wb, but registered.
-            memwb_write_data <= (mem_wb_sel == 2'b01) ? mem_read_data :
-                                (mem_wb_sel == 2'b10) ? mem_pc_plus4  :
-                                                        mem_alu_result;
+            // Pipe A
+            memwb_a_rd_addr    <= mem_a_rd_addr;
+            memwb_a_reg_write  <= mem_a_reg_write;
+            memwb_a_write_data <= (mem_a_wb_sel == 2'b01) ? mem_a_read_data :
+                                  (mem_a_wb_sel == 2'b10) ? mem_a_pc_plus4  :
+                                                            mem_a_alu_result;
+            // Pipe B
+            memwb_b_valid      <= mem_b_valid;
+            memwb_b_rd_addr    <= mem_b_valid ? mem_b_rd_addr   : 5'b0;
+            memwb_b_reg_write  <= mem_b_valid ? mem_b_reg_write : 1'b0;
+            memwb_b_write_data <= mem_b_valid ?
+                                  ((mem_b_wb_sel == 2'b01) ? mem_b_read_data :
+                                   (mem_b_wb_sel == 2'b10) ? mem_b_pc_plus4  :
+                                                             mem_b_alu_result)
+                                  : 32'b0;
         end
     end
+
 endmodule

@@ -20,3 +20,4 @@ sim_soc.v
 ../rtl/hazard_unit.sv
 ../rtl/forwarding_unit.sv
 ../rtl/div_unit.sv
+../rtl/issue_unit.sv
