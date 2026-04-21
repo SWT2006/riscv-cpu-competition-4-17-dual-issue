@@ -30,8 +30,10 @@ module perip_bridge(
 	input  logic [1:0]	 perip_mask			,
     output logic [31:0]  perip_rdata		,
 
+    input  logic [31:0]  dram_raddr         ,
+
     input  logic [63:0]  virtual_sw_input	,
-    input  logic [7:0]   virtual_key_input	,	
+    input  logic [7:0]   virtual_key_input	,
 
 	output logic [39:0]  virtual_seg_output	,
     output logic [31:0]  virtual_led_output
@@ -104,6 +106,7 @@ module perip_bridge(
         .perip_wdata		(perip_wdata),
         .perip_mask			(perip_mask),
         .dram_wen 			(perip_wen & dram_sel),
+        .raddr              (dram_raddr[17:2]),
         .perip_rdata		(dram_rdata)
     );
 

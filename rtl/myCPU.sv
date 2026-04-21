@@ -29,7 +29,9 @@ module myCPU (
     output wire        perip_wen,
     output wire [1:0]  perip_mask,
     output wire [31:0] perip_wdata,
-    input  wire [31:0] perip_rdata
+    input  wire [31:0] perip_rdata,
+    // Early DRAM read address from EX stage
+    output wire [31:0] dram_raddr
 );
 
     cpu_core u_core (
@@ -42,7 +44,8 @@ module myCPU (
         .perip_wen   (perip_wen),
         .perip_mask  (perip_mask),
         .perip_wdata (perip_wdata),
-        .perip_rdata (perip_rdata)
+        .perip_rdata (perip_rdata),
+        .dram_raddr  (dram_raddr)
     );
 
 endmodule

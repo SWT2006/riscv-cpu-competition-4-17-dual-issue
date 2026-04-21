@@ -7,14 +7,21 @@
 // Applies prediction on slot A only (slot B never contains branch/jump
 // because the issue check excludes them from Pipe B).
 //
-// PC advancement:
-//   - Mispredict redirect from EX: PC = redirect target
-//   - Stall: PC unchanged
-//   - Slot A predicted taken: PC = prediction target, slot B invalid
-//   - Dual-issue: PC += 8
-//   - Single-issue: PC += 4
+// IROM timing model (posedge BRAM):
+//   irom_addr is a combinational next-fetch address driven to the BRAM.
+//   At posedge N the BRAM captures this address and registers the read.
+//   After clk-to-out the instruction is available; stage_if decodes it
+//   and computes the next irom_addr combinationally before posedge N+1.
+//   pc_out tracks which PC the current BRAM output corresponds to.
 //
-// Prediction sources (same as original, applied to slot A only):
+// PC advancement:
+//   - Mispredict redirect from EX: next_fetch = redirect target
+//   - Stall: next_fetch = pc_out (re-read same instruction)
+//   - Slot A predicted taken: next_fetch = prediction target, slot B invalid
+//   - Dual-issue: next_fetch = pc_out + 8
+//   - Single-issue: next_fetch = pc_out + 4
+//
+// Prediction sources (applied to slot A only):
 //   1. JAL: zero-cycle resolution (PC + J-imm)
 //   2. BTFNT: Backward Taken, Forward Not Taken (static)
 //   3. RAS: 8-entry return address stack for JALR returns
@@ -25,9 +32,9 @@ module stage_if (
     input  wire        branch_taken,     // mispredict redirect from EX
     input  wire [31:0] branch_target,
     // IROM interface — 2-wide
-    output wire [31:0] irom_addr,        // full 32-bit PC
-    input  wire [31:0] irom_data_0,      // instruction at PC
-    input  wire [31:0] irom_data_1,      // instruction at PC+4
+    output wire [31:0] irom_addr,        // combinational next-fetch address
+    input  wire [31:0] irom_data_0,      // instruction at pc_out
+    input  wire [31:0] irom_data_1,      // instruction at pc_out+4
     // Outputs to IF/ID register
     output reg  [31:0] pc_out,
     output wire [31:0] pc_a_plus4,
@@ -44,7 +51,7 @@ module stage_if (
     localparam RESET_PC = 32'h8000_0000;
 
     // =================================================================
-    // Instruction field extraction (from IROM output, combinational)
+    // Instruction field extraction (from BRAM output, combinational)
     // =================================================================
     wire [6:0] a_opcode = irom_data_0[6:0];
     wire [4:0] a_rd     = irom_data_0[11:7];
@@ -117,31 +124,37 @@ module stage_if (
     wire can_dual_final = can_dual_raw & ~predict_a;
 
     // =================================================================
+    // Next fetch address (combinational, drives BRAM for the next posedge)
+    // =================================================================
+    wire [31:0] next_fetch = cpu_rst        ? RESET_PC :
+                             branch_taken   ? branch_target :
+                             stall          ? pc_out :
+                             predict_a      ? predict_target_a :
+                             can_dual_final ? (pc_out + 32'd8) :
+                                             (pc_out + 32'd4);
+
+    assign irom_addr = next_fetch;
+
+    // =================================================================
     // PC update & RAS management
     // =================================================================
     always @(posedge clk) begin
         if (cpu_rst) begin
             pc_out  <= RESET_PC;
             ras_ptr <= 3'd0;
-        end else if (branch_taken) begin
-            // EX mispredict redirect — don't touch RAS
-            pc_out <= branch_target;
-        end else if (!stall) begin
-            if (predict_a)
-                pc_out <= predict_target_a;
-            else if (can_dual_final)
-                pc_out <= pc_out + 32'd8;
-            else
-                pc_out <= pc_out + 32'd4;
+        end else begin
+            if (branch_taken || !stall)
+                pc_out <= next_fetch;
 
-            // RAS management (slot A only; slot B never has JAL/JALR)
-            if (is_call & is_return) begin
-                ras[ras_ptr - 3'd1] <= pc_out + 32'd4;
-            end else if (is_call) begin
-                ras[ras_ptr] <= pc_out + 32'd4;
-                ras_ptr      <= ras_ptr + 3'd1;
-            end else if (is_return) begin
-                ras_ptr <= ras_ptr - 3'd1;
+            if (!stall && !branch_taken) begin
+                if (is_call & is_return) begin
+                    ras[ras_ptr - 3'd1] <= pc_out + 32'd4;
+                end else if (is_call) begin
+                    ras[ras_ptr] <= pc_out + 32'd4;
+                    ras_ptr      <= ras_ptr + 3'd1;
+                end else if (is_return) begin
+                    ras_ptr <= ras_ptr - 3'd1;
+                end
             end
         end
     end
@@ -149,7 +162,6 @@ module stage_if (
     // =================================================================
     // Outputs
     // =================================================================
-    assign irom_addr  = pc_out;
     assign pc_a_plus4 = pc_out + 32'd4;
     assign pc_b       = pc_out + 32'd4;
     assign pc_b_plus4 = pc_out + 32'd8;

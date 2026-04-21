@@ -25,9 +25,9 @@
 // ---------------------------------------------------------------------------
 module sim_imem (
     input  wire        clk,
-    input  wire [12:0] raddr,   // word address for instruction fetch (slot A)
-    output wire [31:0] rdata_0, // instruction at PC (slot A)
-    output wire [31:0] rdata_1, // instruction at PC+4 (slot B)
+    input  wire [12:0] raddr,   // word address (combinational next-fetch from stage_if)
+    output reg  [31:0] rdata_0, // instruction at captured address (slot A)
+    output reg  [31:0] rdata_1, // instruction at captured address+1 (slot B)
     // Write port (mirrors data stores so self-modifying code works)
     input  wire        wen,
     input  wire [12:0] waddr,
@@ -36,8 +36,14 @@ module sim_imem (
 );
     reg [31:0] mem [0:8191];   // 8192 words = 32 KB
 
-    assign rdata_0 = mem[raddr];
-    assign rdata_1 = mem[raddr + 13'd1];
+    // Posedge-registered read — matches irom_driver BRAM behaviour.
+    // irom_addr is a combinational next-fetch address from stage_if;
+    // the register here breaks the loop and provides the instruction
+    // after clk-to-out, consistent with synthesis.
+    always @(posedge clk) begin
+        rdata_0 <= mem[raddr];
+        rdata_1 <= mem[raddr + 13'd1];
+    end
 
     always @(posedge clk) begin
         if (wen && wword)
@@ -56,6 +62,7 @@ module sim_dmem (
     input  wire [31:0] wdata,
     input  wire        wen,
     input  wire [1:0]  mask,    // 00=byte, 01=halfword, 10=word
+    input  wire [12:0] raddr_early, // early read word-address from EX stage
     output wire [31:0] rdata,
     // Expose merged write value and word address so sim_imem can mirror
     output wire [12:0] waddr_out,
@@ -66,35 +73,50 @@ module sim_dmem (
 
     wire [12:0] word_addr = byte_addr[14:2];
     wire [1:0]  offset    = byte_addr[1:0];
-    wire [31:0] cur       = mem[word_addr];
 
-    // Combinatorial read: extract byte/halfword based on mask+offset,
-    // matching the behaviour of dram_driver.sv (byte in rdata[7:0],
-    // halfword in rdata[15:0], full word as-is).
+    // Posedge-registered read using early address from EX stage
+    reg [31:0] rdata_raw;
+    always @(posedge clk) begin
+        rdata_raw <= mem[raddr_early];
+    end
+
+    // Store-load bypass: when write and read hit the same word at the same
+    // posedge, forward the written value.
+    reg         bypass_hit;
+    reg  [31:0] bypass_merged;
+    always @(posedge clk) begin
+        bypass_hit    <= wen & (word_addr == raddr_early);
+        bypass_merged <= merged;
+    end
+
+    wire [31:0] rdata_resolved = bypass_hit ? bypass_merged : rdata_raw;
+
+    // Byte/halfword extraction (combinatorial)
     reg [31:0] rout;
     always @(*) begin
         rout = 32'b0;
         case (mask)
             2'b00: begin // byte read
                 case (offset)
-                    2'b00: rout = {24'b0, cur[ 7: 0]};
-                    2'b01: rout = {24'b0, cur[15: 8]};
-                    2'b10: rout = {24'b0, cur[23:16]};
-                    2'b11: rout = {24'b0, cur[31:24]};
+                    2'b00: rout = {24'b0, rdata_resolved[ 7: 0]};
+                    2'b01: rout = {24'b0, rdata_resolved[15: 8]};
+                    2'b10: rout = {24'b0, rdata_resolved[23:16]};
+                    2'b11: rout = {24'b0, rdata_resolved[31:24]};
                 endcase
             end
             2'b01: begin // halfword read
                 case (offset[1])
-                    1'b0: rout = {16'b0, cur[15: 0]};
-                    1'b1: rout = {16'b0, cur[31:16]};
+                    1'b0: rout = {16'b0, rdata_resolved[15: 0]};
+                    1'b1: rout = {16'b0, rdata_resolved[31:16]};
                 endcase
             end
-            default: rout = cur; // word read
+            default: rout = rdata_resolved; // word read
         endcase
     end
     assign rdata = rout;
 
     // Compute merged write word (combinatorial, for imem mirroring)
+    wire [31:0] cur = mem[word_addr];
     reg [31:0] merged;
     always @(*) begin
         merged = wdata; // default word write
@@ -163,6 +185,7 @@ module riscv_soc (
     wire [1:0]  perip_mask;
     wire [31:0] perip_wdata;
     wire [31:0] perip_rdata;
+    wire [31:0] dram_raddr;
 
     // -----------------------------------------------------------------------
     // CPU core (2-wide superscalar pipeline)
@@ -178,7 +201,8 @@ module riscv_soc (
         .perip_wen  (perip_wen),
         .perip_mask (perip_mask),
         .perip_wdata(perip_wdata),
-        .perip_rdata(perip_rdata)
+        .perip_rdata(perip_rdata),
+        .dram_raddr (dram_raddr)
     );
 
     // -----------------------------------------------------------------------
@@ -209,15 +233,16 @@ module riscv_soc (
     // ISA tests use flat byte addresses 0x0000–0x1FFF for data.
     // -----------------------------------------------------------------------
     sim_dmem u_dmem (
-        .clk       (clk),
-        .byte_addr (perip_addr),
-        .wdata     (perip_wdata),
-        .wen       (perip_wen),
-        .mask      (perip_mask),
-        .rdata     (perip_rdata),
-        .waddr_out (dmem_waddr),
-        .merged_out(dmem_merged),
-        .wword_out (dmem_wword)
+        .clk        (clk),
+        .byte_addr  (perip_addr),
+        .wdata      (perip_wdata),
+        .wen        (perip_wen),
+        .mask       (perip_mask),
+        .raddr_early(dram_raddr[14:2]),
+        .rdata      (perip_rdata),
+        .waddr_out  (dmem_waddr),
+        .merged_out (dmem_merged),
+        .wword_out  (dmem_wword)
     );
 
     // -----------------------------------------------------------------------

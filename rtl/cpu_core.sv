@@ -20,7 +20,9 @@ module cpu_core (
     output wire        perip_wen,
     output wire [1:0]  perip_mask,
     output wire [31:0] perip_wdata,
-    input  wire [31:0] perip_rdata
+    input  wire [31:0] perip_rdata,
+    // Early DRAM read address from EX stage (pre-registration, for posedge BRAM read)
+    output wire [31:0] dram_raddr
 );
 
     // =================================================================
@@ -633,6 +635,15 @@ module cpu_core (
         .memwb_b_reg_write (memwb_b_reg_write),
         .memwb_b_write_data(memwb_b_write_data)
     );
+
+    // =================================================================
+    // Early DRAM read address (from EX stage, before EX/MEM register)
+    // Mirrors stage_mem pipe mux: if pipe B has a memory op, use B's ALU
+    // result; otherwise use A's. The DRAM BRAM samples this at posedge,
+    // giving a full 10ns period instead of the 5ns negedge half-period.
+    // =================================================================
+    wire ex_early_b_mem = idex_b_valid & (idex_b_mem_read | idex_b_mem_write);
+    assign dram_raddr = ex_early_b_mem ? ex_b_alu_result : ex_a_alu_result;
 
     // =================================================================
     // Stage 5: WB — pre-computed in pipe_memwb.

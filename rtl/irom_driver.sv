@@ -5,13 +5,11 @@
 // Replaces the single-port Xilinx IROM IP so that the 2-wide pipeline can
 // fetch two instructions per cycle (slot A at PC, slot B at PC+4).
 //
-// Design follows the same pattern as dram_driver.sv:
-//   - Block RAM storage (4096 x 32-bit = 16 KB, matching original IROM size)
-//   - Negedge-clocked read ports for same-cycle semantics:
-//       posedge N  : PC register updates, driving addr
-//       negedge N  : BRAM latches addr, starts read
-//       +~2 ns     : read data stable
-//       posedge N+1: IF/ID pipeline register captures instructions
+// Posedge-clocked read ports:
+//   stage_if drives irom_addr as a combinational next-fetch address.
+//   At posedge N the BRAM captures that address and registers the read data.
+//   After clk-to-out (~2 ns) the instruction is available for decode /
+//   prediction in stage_if, giving a full-period posedge-to-posedge path.
 //
 // Initialization: Vivado reads the $readmemh initial block to pre-load BRAM
 // content at synthesis time.  Point IROM_HEX to the hex file converted from
@@ -20,7 +18,7 @@
 
 module irom_driver (
     input  logic        clk,
-    input  logic [11:0] addr,       // word address = PC[13:2]
+    input  logic [11:0] addr,       // word address (combinational from stage_if)
     output logic [31:0] rdata_0,    // instruction at addr   (slot A)
     output logic [31:0] rdata_1     // instruction at addr+1 (slot B)
 );
@@ -34,15 +32,15 @@ module irom_driver (
     // project source directory.  The parameter / define can be overridden per
     // build configuration.
     initial begin
-        $readmemh("irom_init.hex", mem);
+        $readmemh("D:/file/integrated circuit competition/coe/hex/irom0.hex", mem);
     end
 
     // =========================================================================
-    // Dual read ports — negedge clocked (same-cycle read semantics)
+    // Dual read ports — posedge clocked
     // =========================================================================
     // Vivado infers true dual-port BRAM: port A at addr, port B at addr+1.
     // Both use the read-only path (no write port needed for instruction ROM).
-    always_ff @(negedge clk) begin
+    always_ff @(posedge clk) begin
         rdata_0 <= mem[addr];
         rdata_1 <= mem[addr + 12'd1];
     end
